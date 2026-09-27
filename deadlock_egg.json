@@ -1,0 +1,102 @@
+{
+  "_comment": "Custom experimental Deadworks egg. Source and scripts reviewed; not live game-tested. No custom image build required.",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-09-27T00:00:00+00:00",
+  "name": "Deadworks (Deadlock) - Wine - Experimental",
+  "author": "local@example.com",
+  "description": "Deadworks Windows dedicated server under Wine 11. AMD64 only. First start uses Steam mobile QR authentication, then downloads ~35 GB. Requires an account with Deadlock access. Allocate at least 60 GB disk. Custom integration, not live-tested. Source revision: 495553c90049449cb2b1090dba8d0c82506edac1",
+  "features": null,
+  "docker_images": {
+    "Wine 11 (Pelican)": "ghcr.io/pelican-eggs/yolks:wine_11"
+  },
+  "file_denylist": [],
+  "startup": "exec bash /home/container/start-deadworks.sh",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\": \"PELICAN_DEADWORKS_READY\"}",
+    "logs": "{}",
+    "stop": "^SIGTERM"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/usr/bin/env bash\nset -euo pipefail\nexport DEBIAN_FRONTEND=noninteractive\napt-get update\napt-get install -y --no-install-recommends ca-certificates curl unzip python3\ncd /mnt/server\nmkdir -p .runtime/{depotdownloader,dotnet-win,deadworks} steam/home data plugins configs maps\nfetch() { curl --fail --location --retry 3 --connect-timeout 20 \"$1\" -o \"$2\"; }\nfetch 'https://raw.githubusercontent.com/Deadworks-net/deadworks/495553c90049449cb2b1090dba8d0c82506edac1/docker/entrypoint.sh' '.runtime/entrypoint.sh'\necho 'dd30409ef479929ce1de9134074d2e151c2a7548f3523263ed5f61daacf6f584  .runtime/entrypoint.sh' | sha256sum --check -\nfetch 'https://raw.githubusercontent.com/Deadworks-net/deadworks/495553c90049449cb2b1090dba8d0c82506edac1/docker/console.pl' '.runtime/console.pl'\necho '372d50b397325ad09b355aed970a07016d3b4ec5ed7dc639b57e743456d0e4b4  .runtime/console.pl' | sha256sum --check -\npython3 - <<'PATCH_UPSTREAM'\nimport re\nfrom pathlib import Path\nroot = Path('.runtime')\nmapping = {\n    '/opt/depotdownloader': '/home/container/.runtime/depotdownloader',\n    '/opt/deadworks': '/home/container/.runtime/deadworks',\n    '/steam': '/home/container/steam',\n    '/data': '/home/container/data',\n    '/plugins': '/home/container/plugins',\n    '/configs': '/home/container/configs',\n    '/maps': '/home/container/maps',\n}\n# Match absolute paths only, not suffixes like managed/plugins or citadel/maps.\npattern = re.compile(r'(?<![\\w/])(' + '|'.join(map(re.escape, mapping)) + r')(?=[/\\s\\\"\\x27;:]|$)')\nfor name in ('entrypoint.sh', 'console.pl'):\n    text = (root / name).read_text()\n    text = pattern.sub(lambda m: mapping[m.group()], text)\n    if name == 'console.pl':\n        # A readiness check must not pass merely because a download is in progress.\n        text = text.replace(\"    exit 0 if -e '/tmp/deadworks-starting';\", '')\n    (root / name).write_text(text)\nPATCH_UPSTREAM\n\nfetch 'https://github.com/SteamRE/DepotDownloader/releases/download/DepotDownloader_3.4.0/DepotDownloader-linux-x64.zip' .runtime/depotdownloader.zip\nunzip -qo .runtime/depotdownloader.zip -d .runtime/depotdownloader\nchmod +x .runtime/depotdownloader/DepotDownloader\nfetch 'https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.12/dotnet-runtime-10.0.12-win-x64.zip' .runtime/dotnet.zip\nunzip -qo .runtime/dotnet.zip -d .runtime/dotnet-win\nfetch 'https://github.com/Deadworks-net/deadworks/releases/download/v0.4.18/deadworks-v0.4.18.zip' .runtime/deadworks.zip\nunzip -qo .runtime/deadworks.zip -d .runtime/deadworks\necho v0.4.18 > .runtime/deadworks/.version\ntest -f .runtime/deadworks/game/bin/win64/deadworks.exe\ntest -d .runtime/dotnet-win/host/fxr\nrm -f .runtime/depotdownloader.zip .runtime/dotnet.zip .runtime/deadworks.zip\ncat > start-deadworks.sh <<'PELICAN_LAUNCHER'\n#!/usr/bin/env bash\nset -euo pipefail\ncd /home/container\nexport WINEPREFIX=/home/container/data/wineprefix\nexport WINEARCH=win64 WINEDEBUG=-all\n# Override the generic image's mscoree disable: .NET assemblies need it enabled.\nexport WINEDLLOVERRIDES='mshtml,winemenubuilder.exe=d'\nexport DOTNET_ROOT='Z:\\home\\container\\.runtime\\dotnet-win'\nexport DOTNET_EnableWriteXorExecute=0\nexport DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1\nexport XDG_RUNTIME_DIR=/tmp\nmkdir -p steam/game steam/home data/wineprefix plugins configs maps\nfor tool in wine wineboot wineserver perl curl unzip flock; do\n    command -v \"$tool\" >/dev/null || { echo \"Missing runtime dependency: $tool\"; exit 1; }\ndone\nperl -MIO::Socket::INET -MIO::Select -e 1\n[[ -x .runtime/depotdownloader/DepotDownloader ]] || {\n    echo 'Installation incomplete. Reinstall this server from Pelican.'; exit 1;\n}\n[[ -n \"${STEAM_USERNAME:-}\" ]] || {\n    echo 'Set Steam Username on the Startup page to an account with Deadlock access.'; exit 1;\n}\nif [[ \"${LOGIN_MODE:-auto}\" == login ]] || \\\n   [[ ! -f steam/.pelican-login ]] || \\\n   [[ \"$(cat steam/.pelican-login 2>/dev/null || true)\" != \"$STEAM_USERNAME\" ]]; then\n    echo 'Steam login: scan the QR code below with the Steam mobile app.'\n    echo 'The account must match Steam Username. Keep this console open.'\n    bash .runtime/entrypoint.sh login\n    printf '%s\\n' \"$STEAM_USERNAME\" > steam/.pelican-login\nfi\n\nserver_pid=''\ninput_pid=''\nready_pid=''\ncleanup() {\n    trap - TERM INT\n    [[ -z \"$input_pid\" ]] || kill \"$input_pid\" 2>/dev/null || true\n    [[ -z \"$ready_pid\" ]] || kill \"$ready_pid\" 2>/dev/null || true\n    if [[ -n \"$server_pid\" ]]; then\n        kill -TERM \"$server_pid\" 2>/dev/null || true\n        wineserver -k 2>/dev/null || true\n        wait \"$server_pid\" 2>/dev/null || true\n    fi\n}\ntrap 'cleanup; exit 0' TERM INT\nexec 3<&0\nbash .runtime/entrypoint.sh run </dev/null &\nserver_pid=$!\n(\n    while kill -0 \"$server_pid\" 2>/dev/null; do\n        if perl .runtime/console.pl --ping >/dev/null 2>&1; then\n            echo 'PELICAN_DEADWORKS_READY'\n            break\n        fi\n        sleep 5\n    done\n) &\nready_pid=$!\n(\n    while IFS= read -r line <&3; do\n        [[ -z \"$line\" ]] && continue\n        perl .runtime/console.pl \"$line\" || echo 'Console unavailable: the server may still be starting.'\n    done\n) &\ninput_pid=$!\nresult=0\nwait \"$server_pid\" || result=$?\ncleanup\nexit \"$result\"\nPELICAN_LAUNCHER\nchmod +x start-deadworks.sh .runtime/entrypoint.sh .runtime/console.pl\necho 'Installed. Start the server and complete Steam authentication in the Console.'\n",
+      "container": "debian:bookworm-slim",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Steam Username",
+      "description": "Steam login name, not display name. Account must own/access Deadlock. First start uses Steam mobile QR login; no password is stored in the egg.",
+      "env_variable": "STEAM_USERNAME",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:128",
+      "field_type": "text"
+    },
+    {
+      "name": "Steam Login Mode",
+      "description": "auto: authenticate if no cached login, then run. login: force fresh authentication before running; return to auto afterwards.",
+      "env_variable": "LOGIN_MODE",
+      "default_value": "auto",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:auto,login",
+      "field_type": "text"
+    },
+    {
+      "name": "Server Name",
+      "description": "Public server name.",
+      "env_variable": "SERVER_NAME",
+      "default_value": "Deadworks Server",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:100",
+      "field_type": "text"
+    },
+    {
+      "name": "Map",
+      "description": "Starting map.",
+      "env_variable": "SERVER_MAP",
+      "default_value": "dl_midtown",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|regex:/^[A-Za-z0-9_-]+$/",
+      "field_type": "text"
+    },
+    {
+      "name": "Join Password",
+      "description": "Optional player join password. Avoid quotes and semicolons.",
+      "env_variable": "SERVER_PASSWORD",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:128",
+      "field_type": "text"
+    },
+    {
+      "name": "Update Game on Start",
+      "description": "1 checks for updates before launch. First download needs 1. The generic image SteamCMD updater is unused because SRCDS_APPID is unset.",
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "1",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:0,1",
+      "field_type": "text"
+    },
+    {
+      "name": "Deadworks Version",
+      "description": "latest follows upstream releases. image uses the bundled v0.4.18 fallback. A game patch may require a newer Deadworks release.",
+      "env_variable": "DEADWORKS_VERSION",
+      "default_value": "latest",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|regex:/^(latest|image|v[0-9]+\\.[0-9]+\\.[0-9]+)$/",
+      "field_type": "text"
+    }
+  ]
+}
