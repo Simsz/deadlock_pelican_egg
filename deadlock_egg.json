@@ -5,7 +5,7 @@
     "update_url": null
   },
   "exported_at": "2026-09-27T00:00:00+00:00",
-  "name": "Deadworks (Deadlock) - Wine - Experimental",
+  "name": "Deadworks (Deadlock) - Wine - Experimental r2",
   "author": "local@example.com",
   "description": "Deadworks Windows dedicated server under Wine 11. AMD64 only. First start uses Steam mobile QR authentication, then downloads ~35 GB. Requires an account with Deadlock access. Allocate at least 60 GB disk. Custom integration, not live-tested. Source revision: 495553c90049449cb2b1090dba8d0c82506edac1",
   "features": null,
@@ -90,12 +90,12 @@
     },
     {
       "name": "Deadworks Version",
-      "description": "latest follows upstream releases. image uses the bundled v0.4.18 fallback. A game patch may require a newer Deadworks release.",
+      "description": "Use latest, image, or a release tag such as v0.4.18. latest follows upstream releases. image uses the bundled v0.4.18 fallback. A game patch may require a newer Deadworks release.",
       "env_variable": "DEADWORKS_VERSION",
       "default_value": "latest",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|regex:/^(latest|image|v[0-9]+\\.[0-9]+\\.[0-9]+)$/",
+      "rules": "required|string|max:64",
       "field_type": "text"
     }
   ]
