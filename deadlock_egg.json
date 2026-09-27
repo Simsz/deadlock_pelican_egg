@@ -5,7 +5,7 @@
     "update_url": null
   },
   "exported_at": "2026-09-27T00:00:00+00:00",
-  "name": "Deadworks (Deadlock) - Wine - Experimental r2",
+  "name": "Deadworks (Deadlock) - Wine - Experimental r3",
   "author": "local@example.com",
   "description": "Deadworks Windows dedicated server under Wine 11. AMD64 only. First start uses Steam mobile QR authentication, then downloads ~35 GB. Requires an account with Deadlock access. Allocate at least 60 GB disk. Custom integration, not live-tested. Source revision: 495553c90049449cb2b1090dba8d0c82506edac1",
   "features": null,
@@ -35,7 +35,11 @@
       "default_value": "",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string|max:128",
+      "rules": [
+        "required",
+        "string",
+        "max:128"
+      ],
       "field_type": "text"
     },
     {
@@ -45,7 +49,10 @@
       "default_value": "auto",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|in:auto,login",
+      "rules": [
+        "required",
+        "in:auto,login"
+      ],
       "field_type": "text"
     },
     {
@@ -55,7 +62,11 @@
       "default_value": "Deadworks Server",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string|max:100",
+      "rules": [
+        "required",
+        "string",
+        "max:100"
+      ],
       "field_type": "text"
     },
     {
@@ -65,7 +76,10 @@
       "default_value": "dl_midtown",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|regex:/^[A-Za-z0-9_-]+$/",
+      "rules": [
+        "required",
+        "regex:/^[A-Za-z0-9_-]+$/"
+      ],
       "field_type": "text"
     },
     {
@@ -75,7 +89,11 @@
       "default_value": "",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "nullable|string|max:128",
+      "rules": [
+        "nullable",
+        "string",
+        "max:128"
+      ],
       "field_type": "text"
     },
     {
@@ -85,7 +103,10 @@
       "default_value": "1",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|in:0,1",
+      "rules": [
+        "required",
+        "in:0,1"
+      ],
       "field_type": "text"
     },
     {
@@ -95,7 +116,11 @@
       "default_value": "latest",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string|max:64",
+      "rules": [
+        "required",
+        "string",
+        "max:64"
+      ],
       "field_type": "text"
     }
   ]
